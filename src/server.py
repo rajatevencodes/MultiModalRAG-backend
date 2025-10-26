@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes.userRoutes import router as userRoutes
+from src.routes.userRoutes import router as userRoutes
+from src.routes.projectRoutes import router as projectRoutes
 
 app = FastAPI(
     title="MultiModal RAG",
@@ -15,8 +16,8 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["Content-Type"],
 )
-
-app.include_router(userRoutes, prefix="/user", tags=["User Management"])
+app.include_router(userRoutes, prefix="/api/user")
+app.include_router(projectRoutes, prefix="/api/project")
 
 
 @app.get("/healthcheck")
