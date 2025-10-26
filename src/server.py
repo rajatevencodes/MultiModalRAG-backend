@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from routes.userRoutes import router as userRoutes
 
 app = FastAPI(
     title="MultiModal RAG",
@@ -8,14 +9,14 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # TODO : Update this for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["Content-Type"],
 )
 
-print("hello from server.py")
+app.include_router(userRoutes, prefix="/user", tags=["User Management"])
 
 
 @app.get("/healthcheck")
