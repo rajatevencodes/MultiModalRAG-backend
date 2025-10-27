@@ -3,3 +3,4 @@ dotenv
 fastapi
 uvicorn
 supabase
+clerk-backend-api

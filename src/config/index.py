@@ -11,4 +11,6 @@ if not os.getenv("SUPABASE_API_URL") or not os.getenv("SUPABASE_SECRET_KEY"):
 appConfig = {
     "supabase_api_url": os.getenv("SUPABASE_API_URL"),
     "supabase_secret_key": os.getenv("SUPABASE_SECRET_KEY"),
+    "clerk_secret_key": os.getenv("CLERK_SECRET_KEY"),
+    "domain": os.getenv("DOMAIN"),
 }
