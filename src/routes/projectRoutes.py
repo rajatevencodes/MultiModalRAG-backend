@@ -2,7 +2,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends
 from src.services.supabase import supabase
 from src.services.clerkAuth import get_current_user_clerk_id
-from src.models.index import ProjectCreate
+from src.models.index import ProjectCreate, ProjectSettings
 
 router = APIRouter(tags=["projectRoutes"])
 
@@ -15,6 +15,8 @@ Delete a project: DELETE `/delete/{project_id}`
 Get a project: GET `/{project_id}`
 Get project chats: GET `/{project_id}/chats`
 Get project settings: GET `/{project_id}/settings`
+Update project settings: PUT `/{project_id}/settings/update`
+
 """
 
 
@@ -255,3 +257,64 @@ async def get_project_settings(
             status_code=500,
             detail=f"An internal server error occurred while retrieving project {project_id} settings: {str(e)}",
         )
+
+
+@router.put("/{project_id}/settings/update")
+async def update_project_settings(
+    project_id: str,
+    settings: ProjectSettings,
+    current_user_clerk_id: str = Depends(get_current_user_clerk_id),
+):
+    try:
+        # Verify if the project settings exist and belongs to the current user
+        # First verify the project belongs to the user
+        project_ownership_verification_result = (
+            supabase.table("projects")
+            .select("id")
+            .eq("id", project_id)
+            .eq("clerk_id", current_user_clerk_id)
+            .execute()
+        )
+
+        if not project_ownership_verification_result.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Project not found or you don't have permission to update its settings",
+            )
+
+        # Then verify the project settings exist
+        project_settings_ownership_verification_result = (
+            supabase.table("project_settings")
+            .select("*")
+            .eq("project_id", project_id)
+            .execute()
+        )
+
+        if not project_settings_ownership_verification_result.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Project settings not found for this project",
+            )
+
+        project_settings_update_data = (
+            settings.model_dump()  # Pydantic modal to dictionary conversion
+        )
+        project_settings_update_result = (
+            supabase.table("project_settings")
+            .update(project_settings_update_data)
+            .eq("project_id", project_id)
+            .execute()
+        )
+
+        if not project_settings_update_result.data:
+            raise HTTPException(
+                status_code=422, detail="Failed to update project settings"
+            )
+
+        return {
+            "success": True,
+            "message": "Project settings updated successfully",
+            "data": project_settings_update_result.data[0],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
