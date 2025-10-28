@@ -2,7 +2,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends
 from src.services.supabase import supabase
 from src.services.clerkAuth import get_current_user_clerk_id
-from src.models.index import Project
+from src.models.index import ProjectCreate
 
 router = APIRouter(tags=["projectRoutes"])
 
@@ -31,65 +31,56 @@ async def get_projects(current_user_clerk_id: str = Depends(get_current_user_cle
 
 @router.post("/create")
 async def create_project(
-    project_data: Project,
+    project_data: ProjectCreate,
     current_user_clerk_id: str = Depends(get_current_user_clerk_id),
 ):
     try:
         # Insert new project into database
+        project_insert_data = {
+            "name": project_data.name,
+            "description": project_data.description,
+            "clerk_id": current_user_clerk_id,
+        }
+
         project_creation_result = (
-            supabase.table("projects")
-            .insert(
-                {
-                    # Auto-generated fields: id, created_at
-                    "name": project_data.name,
-                    "description": project_data.description,
-                    "clerk_id": current_user_clerk_id,
-                }
-            )
-            .execute()
+            supabase.table("projects").insert(project_insert_data).execute()
         )
 
         if not project_creation_result.data:
             raise HTTPException(
-                status_code=422,  # Unprocessable Entity - validation failed
+                status_code=422,
                 detail="Failed to create project - invalid data provided",
             )
 
         newly_created_project = project_creation_result.data[0]
 
         # Create default project settings for the new project
+        project_settings_data = {
+            "project_id": newly_created_project["id"],
+            "embedding_model": "text-embedding-3-large",
+            "rag_strategy": "basic",
+            "agent_type": "agentic",
+            "chunks_per_search": 10,
+            "final_context_size": 5,
+            "similarity_threshold": 0.3,
+            "number_of_queries": 5,
+            "reranking_enabled": True,
+            "reranking_model": "reranker-english-v3.0",
+            "vector_weight": 0.7,
+            "keyword_weight": 0.3,
+        }
+
         project_settings_creation_result = (
-            supabase.table("project_settings")
-            .insert(
-                {
-                    # Auto-generated fields: id, created_at
-                    "project_id": newly_created_project["id"],
-                    "embedding_model": "text-embedding-3-large",  # OpenAI Embedding Model
-                    "rag_strategy": "basic",
-                    "agent_type": "agentic",
-                    "chunks_per_search": 10,
-                    "final_context_size": 5,
-                    "similarity_threshold": 0.3,
-                    "number_of_queries": 5,
-                    "reranking_enabled": True,
-                    "reranking_model": "reranker-english-v3.0",
-                    "vector_weight": 0.7,
-                    "keyword_weight": 0.3,
-                }
-            )
-            .execute()
+            supabase.table("project_settings").insert(project_settings_data).execute()
         )
 
         if not project_settings_creation_result.data:
             # Rollback: Delete the project if settings creation fails
-            project_rollback_result = (
-                supabase.table("projects")
-                .delete()
-                .eq("id", newly_created_project["id"])
-                .execute()
-            )
+            supabase.table("projects").delete().eq(
+                "id", newly_created_project["id"]
+            ).execute()
             raise HTTPException(
-                status_code=422,  # Unprocessable Entity - failed to create related data
+                status_code=422,
                 detail="Failed to create project settings - project creation rolled back",
             )
 

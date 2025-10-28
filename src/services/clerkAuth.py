@@ -19,8 +19,6 @@ def get_current_user_clerk_id(request: Request):
         if not request_state.is_signed_in:
             raise HTTPException(status_code=401, detail="User is not signed in")
 
-        # TODO : To remove it
-        print(request_state.payload)
         clerk_id = request_state.payload.get("sub")  # sub - subject - clerk_id
 
         if not clerk_id:
