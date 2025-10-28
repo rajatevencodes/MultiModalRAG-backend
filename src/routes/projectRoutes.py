@@ -6,6 +6,17 @@ from src.models.index import ProjectCreate
 
 router = APIRouter(tags=["projectRoutes"])
 
+"""
+`/api/project`
+
+List all projects: GET `/list`
+Create a new project: POST `/create`
+Delete a project: DELETE `/delete/{project_id}`
+Get a project: GET `/{project_id}`
+Get project chats: GET `/{project_id}/chats`
+Get project settings: GET `/{project_id}/settings`
+"""
+
 
 @router.get("/list")
 async def get_projects(current_user_clerk_id: str = Depends(get_current_user_clerk_id)):
@@ -150,4 +161,97 @@ async def delete_project(
         raise HTTPException(
             status_code=500,
             detail=f"An internal server error occurred while deleting project: {str(e)}",
+        )
+
+
+@router.get("/{project_id}")
+async def get_project(
+    project_id: str, current_user_clerk_id: str = Depends(get_current_user_clerk_id)
+):
+    try:
+        project_result = (
+            supabase.table("projects")
+            .select("*")
+            .eq("id", project_id)
+            .eq("clerk_id", current_user_clerk_id)
+            .execute()
+        )
+
+        if not project_result.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Project not found or you don't have permission to access it",
+            )
+
+        return {
+            "success": True,
+            "message": "Project retrieved successfully",
+            "data": project_result.data[0],
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An internal server error occurred while retrieving project: {str(e)}",
+        )
+
+
+@router.get("/{project_id}/chats")
+async def get_project_chats(
+    project_id: str, current_user_clerk_id: str = Depends(get_current_user_clerk_id)
+):
+    try:
+        project_chats_result = (
+            supabase.table("chats")
+            .select("*")
+            .eq("project_id", project_id)
+            .eq("clerk_id", current_user_clerk_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        # if not project_chats_result.data:
+        #     raise HTTPException(
+        #         status_code=404,
+        #         detail="No chats found for project",
+        #     )
+
+        return {
+            "success": True,
+            "message": "Project chats retrieved successfully",
+            "data": project_chats_result.data,  # Not result.data[0] because we are returning all chats for the project
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An internal server error occurred while retrieving project {project_id} chats: {str(e)}",
+        )
+
+
+@router.get("/{project_id}/settings")
+async def get_project_settings(
+    project_id: str, current_user_clerk_id: str = Depends(get_current_user_clerk_id)
+):
+    try:
+        project_settings_result = (
+            supabase.table("project_settings")
+            .select("*")
+            .eq("project_id", project_id)
+            .execute()
+        )
+
+        if not project_settings_result.data:
+            raise HTTPException(
+                status_code=404,
+                detail="No settings found for project",
+            )
+
+        return {
+            "success": True,
+            "message": "Project settings retrieved successfully",
+            "data": project_settings_result.data[0],
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An internal server error occurred while retrieving project {project_id} settings: {str(e)}",
         )
