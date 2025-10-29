@@ -122,7 +122,7 @@ async def delete_project(
         # Verify if the project exists and belongs to the current user
         project_ownership_verification_result = (
             supabase.table("projects")
-            .select("*")
+            .select("id")
             .eq("id", project_id)
             .eq("clerk_id", current_user_clerk_id)
             .execute()
@@ -285,7 +285,7 @@ async def update_project_settings(
         # Then verify the project settings exist
         project_settings_ownership_verification_result = (
             supabase.table("project_settings")
-            .select("*")
+            .select("id")
             .eq("project_id", project_id)
             .execute()
         )

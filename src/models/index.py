@@ -1,7 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
-from datetime import datetime
-import uuid
 
 
 class ProjectCreate(BaseModel):
@@ -29,3 +27,15 @@ class ProjectSettings(BaseModel):
     reranking_model: str = Field(..., description="The reranking model to use")
     vector_weight: float = Field(..., description="The vector weight")
     keyword_weight: float = Field(..., description="The keyword weight")
+
+
+class FileUploadRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    file_name: str = Field(..., description="The name of the file")
+    file_type: str = Field(..., description="The type of the file")
+    file_size: int = Field(..., description="The size of the file")
+
+
+class UrlRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    url: str = Field(..., description="The url to process")
