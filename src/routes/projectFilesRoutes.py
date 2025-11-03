@@ -3,7 +3,7 @@ from src.services.supabase import supabase
 from src.services.clerkAuth import get_current_user_clerk_id
 from src.services.awsS3 import s3_client
 from src.config.index import appConfig
-from src.models.index import FileUploadRequest, UrlRequest
+from src.models.index import FileUploadRequest, UrlRequest, ProcessingStatus
 from src.utils.index import validate_url
 import uuid
 from src.services.celery import perform_rag_ingestion_task
@@ -118,7 +118,7 @@ async def get_upload_presigned_url(
                     "s3_key": s3_key,
                     "file_size": file_upload_request.file_size,
                     "file_type": file_upload_request.file_type,
-                    "processing_status": "pending",
+                    "processing_status": ProcessingStatus.PENDING,
                     "clerk_id": current_user_clerk_id,
                 }
             )
@@ -183,7 +183,7 @@ async def confirm_file_upload_to_s3(
             supabase.table("project_documents")
             .update(
                 {
-                    "processing_status": "queued",
+                    "processing_status": ProcessingStatus.QUEUED,
                 }
             )
             .eq("s3_key", s3_key)
@@ -258,7 +258,7 @@ async def process_url(
                     "s3_key": "",
                     "file_size": 0,
                     "file_type": "text/html",
-                    "processing_status": "queued",
+                    "processing_status": ProcessingStatus.QUEUED,
                     "clerk_id": current_user_clerk_id,
                     "source_type": "url",
                     "source_url": url,

@@ -42,10 +42,13 @@ class UrlRequest(BaseModel):
     url: str = Field(..., description="The url to process")
 
 
-# TODO : Add more statuses as needed
-class DocumentProcessingStatusEnum(str, Enum):
+class ProcessingStatus(str, Enum):
+    UPLOADING = "uploading"
     PENDING = "pending"
     QUEUED = "queued"
     PROCESSING = "processing"
+    PARTITIONING = "partitioning"
+    CHUNKING = "chunking"
+    SUMMARIZING = "summarizing"
+    VECTORIZING = "vectorizing"
     COMPLETED = "completed"
-    FAILED = "failed"

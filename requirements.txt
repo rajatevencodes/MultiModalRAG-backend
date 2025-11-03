@@ -2,8 +2,16 @@ pydantic
 dotenv
 fastapi
 uvicorn
+
 supabase
 clerk-backend-api
-boto3
+boto3 # AWS S3
 celery
 redis
+
+# RAG
+
+langchain==0.3.27
+langchain-community==0.3.27
+langchain-openai==0.3.28
+unstructured[all-docs]==0.18.11

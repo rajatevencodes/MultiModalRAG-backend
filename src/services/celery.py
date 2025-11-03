@@ -12,7 +12,6 @@ celery_app = Celery(
 def perform_rag_ingestion_task(document_id: str):
     try:
         process_document_result = process_document(document_id)
-        print("Hi From Celery Task")
         return (
             f"Document {process_document_result['document_id']} processed successfully"
         )
