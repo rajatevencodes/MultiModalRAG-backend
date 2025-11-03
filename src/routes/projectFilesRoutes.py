@@ -6,6 +6,7 @@ from src.config.index import appConfig
 from src.models.index import FileUploadRequest, UrlRequest
 from src.utils.index import validate_url
 import uuid
+from src.services.celery import perform_rag_ingestion_task
 
 router = APIRouter(tags=["projectFilesRoutes"])
 
@@ -161,7 +162,7 @@ async def confirm_file_upload_to_s3(
             )
 
         # Verify file exists in database
-        file_verification_result = (
+        document_verification_result = (
             supabase.table("project_documents")
             .select("id")
             .eq("s3_key", s3_key)
@@ -170,7 +171,7 @@ async def confirm_file_upload_to_s3(
             .execute()
         )
 
-        if not file_verification_result.data:
+        if not document_verification_result.data:
             raise HTTPException(
                 status_code=404,
                 detail="File not found or you don't have permission to confirm upload to S3 for this file",
@@ -178,7 +179,7 @@ async def confirm_file_upload_to_s3(
 
         # Update file status to "queued"
         # Not 'completed' because the file is not yet processed - RAG pipeline will process it
-        file_update_result = (
+        document_update_result = (
             supabase.table("project_documents")
             .update(
                 {
@@ -189,12 +190,34 @@ async def confirm_file_upload_to_s3(
             .execute()
         )
 
-        # TODO : Start Background pre-processing of this file
+        # * Start Background pre-processing of this document using Celery Task
+        document_id = document_update_result.data[0]["id"]
+        # * Celery Task - returns a task id - Store to track later
+        task_result = perform_rag_ingestion_task.delay(document_id)
+        task_id = task_result.id
+
+        # Update the project document record with the task_id
+        document_update_result = (
+            supabase.table("project_documents")
+            .update(
+                {
+                    "task_id": task_id,
+                }
+            )
+            .eq("id", document_id)
+            .execute()
+        )
+        if not document_update_result.data:
+            raise HTTPException(
+                status_code=422,
+                detail="Failed to update project document record with task_id",
+            )
+
         return {
             "success": True,
             "message": "File upload to S3 confirmed successfully And Started Background Pre-Processing of this file",
             "data": {
-                "file_update_result": file_update_result.data[0],
+                "file_update_result": document_update_result.data[0],
             },
         }
 
@@ -251,6 +274,29 @@ async def process_url(
             )
 
         # TODO : Start Background Pre-Processing of this URL
+        # * Start Background pre-processing of this document using Celery Task
+        document_id = document_creation_result.data[0]["id"]
+        # * Celery Task - returns a task id - Store to track later
+        task_result = perform_rag_ingestion_task.delay(document_id)
+        task_id = task_result.id
+
+        #  Update the project document record with the task_id
+        document_update_result = (
+            supabase.table("project_documents")
+            .update(
+                {
+                    "task_id": task_id,
+                }
+            )
+            .eq("id", document_id)
+            .execute()
+        )
+
+        if not document_update_result.data:
+            raise HTTPException(
+                status_code=422,
+                detail="Failed to update project document record with task_id",
+            )
 
         return {
             "success": True,

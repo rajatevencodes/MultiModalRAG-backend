@@ -5,3 +5,5 @@ uvicorn
 supabase
 clerk-backend-api
 boto3
+celery
+redis

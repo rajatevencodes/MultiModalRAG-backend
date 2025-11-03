@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
+from enum import Enum
 
 
 class ProjectCreate(BaseModel):
@@ -39,3 +40,12 @@ class FileUploadRequest(BaseModel):
 class UrlRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     url: str = Field(..., description="The url to process")
+
+
+# TODO : Add more statuses as needed
+class DocumentProcessingStatusEnum(str, Enum):
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
