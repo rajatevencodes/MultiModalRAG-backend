@@ -13,12 +13,12 @@ router = APIRouter(tags=["projectFilesRoutes"])
 """
 `/api/project`
 
-Get project files: GET `/{project_id}/files`
-Generate presigned url for file upload for frontend: POST `/{project_id}/files/get-presigned-url`
-Confirmation of file upload to S3: POST `/{project_id}/files/confirm-upload-to-s3`
-Add website URL to database: POST `/{project_id}/files/process-url`
-Delete project document: DELETE `/{project_id}/files/delete/{document_id}`
-
+    GET `/{project_id}/files` - Get project files: 
+    Generate presigned url for file upload for frontend: POST `/{project_id}/files/get-presigned-url`
+    POST `/{project_id}/files/confirm-upload-to-s3` : Confirmation of file upload to S3
+    POST `/{project_id}/files/process-url` : Add website URL to database
+    DELETE `/{project_id}/files/delete/{document_id}` : Delete project document
+    GET `{project_id}/files/{document_id}/chunks` : Get project document chunks
 """
 
 
@@ -366,4 +366,47 @@ async def delete_project_document(
         raise HTTPException(
             status_code=500,
             detail=f"An internal server error occurred while deleting project document {document_id} for {project_id}: {str(e)}",
+        )
+
+
+@router.get("/{project_id}/files/{document_id}/chunks")
+async def get_project_document_chunks(
+    project_id: str,
+    document_id: str,
+    current_user_clerk_id: str = Depends(get_current_user_clerk_id),
+):
+    try:
+        # Verify document exists and belongs to the current user and Take complete project document record
+        document_ownership_verification_result = (
+            supabase.table("project_documents")
+            .select("*")
+            .eq("id", document_id)
+            .eq("project_id", project_id)
+            .eq("clerk_id", current_user_clerk_id)
+            .execute()
+        )
+
+        if not document_ownership_verification_result.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Document not found or you don't have permission to delete this document",
+            )
+
+        document_chunks_result = (
+            supabase.table("document_chunks")
+            .select("*")
+            .eq("document_id", document_id)
+            .order("chunk_index")
+            .execute()
+        )
+
+        return {
+            "success": True,
+            "message": "Project document chunks retrieved successfully",
+            "data": document_chunks_result.data or [],
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"An internal server error occurred while getting project document chunks for {document_id} for {project_id}: {str(e)}",
         )

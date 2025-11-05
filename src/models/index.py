@@ -49,6 +49,6 @@ class ProcessingStatus(str, Enum):
     PROCESSING = "processing"
     PARTITIONING = "partitioning"
     CHUNKING = "chunking"
-    SUMMARIZING = "summarizing"
-    VECTORIZING = "vectorizing"
+    SUMMARISING = "summarising"
+    VECTORIZATION = "vectorization"
     COMPLETED = "completed"
