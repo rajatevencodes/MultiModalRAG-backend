@@ -13,6 +13,7 @@ from src.rag.ingestion.utils import (
 )
 from src.models.index import ProcessingStatus
 from unstructured.chunking.title import chunk_by_title
+from src.services.webScrapper import scrapingbee_client
 
 
 def process_document(document_id: str):
@@ -148,6 +149,7 @@ def download_content_and_partition(document_id: str, document: dict):
         # Get the project document record
         document_source_type = document["source_type"]
         elements = None
+        temp_file_path = None
         if document_source_type == "file":
             # Download the file from S3
             s3_key = document["s3_key"]
@@ -161,8 +163,15 @@ def download_content_and_partition(document_id: str, document: dict):
             elements = partition_document(temp_file_path, file_type)
 
         if document_source_type == "url":
-            # TODO :Crawl the url
-            return None
+
+            url = document["source_url"]
+            # Crawl the URL
+            response = scrapingbee_client.get(url)
+            temp_file_path = f"/tmp/{document_id}.html"
+            with open(temp_file_path, "wb") as f:
+                f.write(response.content)
+
+            elements = partition_document(temp_file_path, "html", source_type="url")
 
         elements_summary = analyze_elements(elements)
 

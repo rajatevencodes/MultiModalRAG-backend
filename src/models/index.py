@@ -52,3 +52,13 @@ class ProcessingStatus(str, Enum):
     SUMMARISING = "summarising"
     VECTORIZATION = "vectorization"
     COMPLETED = "completed"
+
+
+class MessageCreate(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    content: str = Field(..., description="The content of the message")
+
+
+class MessageRole(str, Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
