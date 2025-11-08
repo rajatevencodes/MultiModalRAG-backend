@@ -3,6 +3,7 @@ from fastapi import HTTPException
 from typing import List, Dict, Tuple
 from langchain_core.messages import SystemMessage, HumanMessage
 from src.services.llm import openAI
+from src.models.index import QueryVariations
 
 
 def get_project_settings(project_id):
@@ -256,3 +257,54 @@ def prepare_prompt_and_invoke_llm(
     response = openAI["chat_llm"].invoke(messages)
 
     return response.content
+
+
+def rrf_rank_and_fuse(search_results_list, weights=None, k=60):
+    """RRF (Reciprocal Rank Fusion) ranking"""
+    if not search_results_list or not any(search_results_list):
+        return []
+
+    if weights is None:
+        weights = [1.0 / len(search_results_list)] * len(search_results_list)
+
+    chunk_scores = {}
+    all_chunks = {}
+
+    for search_idx, results in enumerate(search_results_list):
+        weight = weights[search_idx]
+
+        for rank, chunk in enumerate(results):
+            chunk_id = chunk.get("id")
+            if not chunk_id:
+                continue
+
+            rrf_score = weight * (1.0 / (k + rank + 1))
+
+            if chunk_id in chunk_scores:
+                chunk_scores[chunk_id] += rrf_score
+            else:
+                chunk_scores[chunk_id] = rrf_score
+                all_chunks[chunk_id] = chunk
+
+    sorted_chunk_ids = sorted(
+        chunk_scores.keys(), key=lambda cid: chunk_scores[cid], reverse=True
+    )
+    return [all_chunks[chunk_id] for chunk_id in sorted_chunk_ids]
+
+
+def generate_query_variations(original_query: str, num_queries: int = 3) -> List[str]:
+    """Generate query variations using LLM"""
+    system_prompt = f"""Generate {num_queries-1} alternative ways to phrase this question for document search. Use different keywords and synonyms while maintaining the same intent. Return exactly {num_queries-1} variations."""
+
+    try:
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=f"Original query: {original_query}"),
+        ]
+
+        structured_llm = openAI["chat_llm"].with_structured_output(QueryVariations)
+        result = structured_llm.invoke(messages)
+
+        return [original_query] + result.queries[: num_queries - 1]
+    except Exception:
+        return [original_query]

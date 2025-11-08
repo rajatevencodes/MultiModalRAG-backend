@@ -53,6 +53,7 @@ ENV/
 .cache/
 coverage.xml
 *.coveragerc
+.python-version
 *.codecov.yml
 
 # Jupyter Notebook checkpoints

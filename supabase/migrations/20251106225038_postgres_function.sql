@@ -52,8 +52,19 @@ $function$;
 
 
 ----------------------------------------------------------
---- keyword_search_document_chunks function ---
--- 
+-- Function: keyword_search_document_chunks
+-- Purpose:  Perform a PostgreSQL full-text (keyword) search over
+--           document chunks, restrict results to a set of documents,
+--           rank matches by relevance, and return the top N chunks.
+--
+-- Behavior / steps:
+-- 1. Start from all rows in `document_chunks`.
+-- 2. Keep only rows whose `document_id` appears in `filter_document_ids`.
+-- 3. Keep only rows where the `fts` tsvector matches the `query_text`
+--    (using `websearch_to_tsquery` to parse user-friendly search syntax).
+-- 4. Rank matches with `ts_rank_cd` (higher score = more relevant) and
+--    sort descending so the most relevant rows come first.
+-- 5. Return up to `chunks_per_search` rows.
 ----------------------------------------------------------
 CREATE OR REPLACE FUNCTION keyword_search_document_chunks(
     query_text text, 
