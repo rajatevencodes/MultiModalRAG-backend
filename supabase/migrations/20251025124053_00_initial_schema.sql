@@ -81,6 +81,7 @@ CREATE TABLE chats (
 );
 
 -- Messages table
+-- trace_id used for tracing the message in LangSmith.
 CREATE TABLE messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     content TEXT NOT NULL,
@@ -92,6 +93,10 @@ CREATE TABLE messages (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Create indexes for search performance
+
+-- Create an index for the semantic vector search
+CREATE INDEX document_chunks_embedding_hnsw_idx ON document_chunks USING hnsw (embedding vector_cosine_ops);
+
+-- Create an index for the keyword search
 CREATE INDEX document_chunks_fts_idx ON document_chunks USING gin (fts);
-CREATE INDEX document_chunks_embedding_hnsw_idx ON document_chunks USING hnsw (embedding vector_ip_ops);
+

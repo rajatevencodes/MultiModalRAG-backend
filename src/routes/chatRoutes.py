@@ -4,6 +4,8 @@ from src.services.clerkAuth import get_current_user_clerk_id
 from src.models.index import ChatCreate, MessageCreate, MessageRole
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from src.services.llm import openAI
+from src.rag.retrieval.index import retrieve_context
+from src.rag.retrieval.utils import prepare_prompt_and_invoke_llm
 
 router = APIRouter(tags=["chatRoutes"])
 
@@ -98,11 +100,7 @@ async def get_chat(
         chat_result = chat_ownership_verification_result.data[0]
 
         messages_result = (
-            supabase.table("messages")
-            .select("*")
-            .eq("chat_id", chat_id)
-            .order("created_at", desc=True)
-            .execute()
+            supabase.table("messages").select("*").eq("chat_id", chat_id).execute()
         )
         chat_result["messages"] = messages_result.data
 
@@ -128,9 +126,10 @@ async def create_message(
 ):
     """
     Step 1 : Insert the message into the database.
-    Step 2 : Generate the AI Response.
-    Step 3 : Insert the AI Response into the database.
-
+    Step 2 : get user's project settings from the database.
+    Step 3 : Retrieval
+    Step 4 : Generation (Retrieved Context + User Message)
+    Step 5 : Insert the AI Response into the database.
     """
     try:
         # Step 1 : Insert the message into the database.
@@ -148,22 +147,21 @@ async def create_message(
         if not message_creation_result.data:
             raise HTTPException(status_code=422, detail="Failed to create message")
 
-        # Step 2: Generate the AI Response.
-        chat_history = [
-            SystemMessage(
-                content="You are a helpful assistant.Provide clear and short answers."
-            ),
-            HumanMessage(content=message),
-        ]
-        ai_response = openAI["chat_llm"].invoke(chat_history)
+        # Step 3 : Retrieval
+        texts, images, tables, citations = retrieve_context(project_id, message)
 
-        # Step 3: Insert the AI Response into the database.
+        # Step 4 : Generation (Retrived Context + User Message)
+        final_response = prepare_prompt_and_invoke_llm(
+            user_query=message, texts=texts, images=images, tables=tables
+        )
+
+        # Step 5: Insert the AI Response into the database.
         ai_response_insert_data = {
-            "content": ai_response.content,
+            "content": final_response,
             "chat_id": chat_id,
             "clerk_id": current_user_clerk_id,
             "role": MessageRole.ASSISTANT.value,
-            "citations": [],
+            "citations": citations,
         }
         ai_response_creation_result = (
             supabase.table("messages").insert(ai_response_insert_data).execute()

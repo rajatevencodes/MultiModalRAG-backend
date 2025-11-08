@@ -300,6 +300,7 @@ def vectorize_chunks_summary_and_store_in_database(processed_chunks, document_id
         # }, {....}]
         # Step 1 : Vectorizing Chunks
         ai_summary_list = [chunk["content"] for chunk in processed_chunks]
+        # ai_summary_list = ["Ai-enhanced summary of the chunk...", "Ai-enhanced summary of the chunk...", ...]
 
         # Edge case : More chunks < More API calls. In Case we exceed the API limit. We will generate in batches.
         batch_size = 10

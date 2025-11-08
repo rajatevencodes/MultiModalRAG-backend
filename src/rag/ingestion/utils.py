@@ -14,21 +14,24 @@ def partition_document(temp_file: str, file_type: str, source_type: str = "file"
 
     source = (source_type or "file").lower()
     if source == "url":
-        return partition_html(filename=temp_file)
+        return partition_html(
+            filename=temp_file,
+        )
 
     kind = (file_type or "").lower()
     dispatch = {
         "pdf": lambda: partition_pdf(
             filename=temp_file,
-            strategy="hi_res",
-            infer_table_structure=True,
-            extract_image_block_types=["Image"],
-            extract_image_block_to_payload=True,
+            strategy="hi_res",  # Most accurate (but slower) processing method of extraction.
+            infer_table_structure=True,  # Keep tables as structured HTML, not jumbled text.
+            extract_image_block_types=["Image"],  # Grab images found in pdf.
+            extract_image_block_to_payload=True,  # Store images as base64 strings in the payload.
         ),
         "docx": lambda: partition_docx(
             filename=temp_file,
             strategy="hi_res",
             infer_table_structure=True,
+            # ! Note : We haven't implemented image extraction for docx,pptx ,md files.
         ),
         "pptx": lambda: partition_pptx(
             filename=temp_file,
@@ -93,13 +96,17 @@ def separate_content_types(chunk, source_type="file"):
     }
 
     # Check for tables and images in original elements
-    if hasattr(chunk, "metadata") and hasattr(chunk.metadata, "orig_elements"):
+    if hasattr(chunk, "metadata") and hasattr(
+        chunk.metadata, "orig_elements"
+    ):  # orig_elements list all the atomic elements in the chunk.
         for element in chunk.metadata.orig_elements:
             element_type = type(element).__name__
 
             # Handle tables
             if element_type == "Table":
                 content_data["types"].append("table")
+                # getattr is a built-in function that returns the value of the named attribute of an object.
+                #  text_as_html will return the HTML representation of the table if it exists, otherwise it will return the text attribute of the element.
                 table_html = getattr(element.metadata, "text_as_html", element.text)
                 content_data["tables"].append(table_html)
 
