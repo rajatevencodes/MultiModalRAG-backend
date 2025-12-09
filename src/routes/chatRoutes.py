@@ -1,11 +1,10 @@
 from fastapi import APIRouter, HTTPException, Depends
+from src.agents.supervisor_agent.agent import create_supervisor_agent
+from src.agents.simple_agent.agent import create_simple_rag_agent
 from src.services.supabase import supabase
 from src.services.clerkAuth import get_current_user_clerk_id
 from src.models.index import ChatCreate, MessageCreate, MessageRole
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from src.services.llm import openAI
-from src.rag.retrieval.index import retrieve_context
-from src.rag.retrieval.utils import prepare_prompt_and_invoke_llm
+from src.rag.retrieval.utils import get_project_settings, get_chat_history
 
 router = APIRouter(tags=["chatRoutes"])
 
@@ -126,9 +125,9 @@ async def create_message(
 ):
     """
     Step 1 : Insert the message into the database.
-    Step 2 : get user's project settings from the database.
-    Step 3 : Retrieval
-    Step 4 : Generation (Retrieved Context + User Message)
+    Step 2 : RETRIEVAL PIPELINE based on the agent_type (Simple or Agentic)
+    Step 3 : Get Chat History and perform Retrieval
+    Step 4 : Invoke the agent_type(Simple or Agentic) for generation (Retrieved Context + User Message)
     Step 5 : Insert the AI Response into the database.
     """
     try:
@@ -147,13 +146,26 @@ async def create_message(
         if not message_creation_result.data:
             raise HTTPException(status_code=422, detail="Failed to create message")
 
-        # Step 3 : Retrieval
-        texts, images, tables, citations = retrieve_context(project_id, message)
+        # Step 2 : Get Project Settings from the database - Retrieval will be performed by the agent.
+        # Based on the agent_type, Retrieval will be performed by the agent.
+        try:
+            project_settings = get_project_settings(project_id)
+            agent_type = project_settings.get("agent_type", "simple")
+        except Exception as e:
+            agent_type = "simple"
 
-        # Step 4 : Generation (Retrived Context + User Message)
-        final_response = prepare_prompt_and_invoke_llm(
-            user_query=message, texts=texts, images=images, tables=tables
-        )
+        chat_history = get_chat_history(chat_id)
+
+        # Invoke the agent_type
+        if agent_type == "simple":
+            agent = create_simple_rag_agent(project_id, chat_history=chat_history)
+
+        if agent_type == "agentic":
+            agent = create_supervisor_agent(project_id, chat_history=chat_history)
+
+        result = agent.invoke({"messages": [{"role": "user", "content": message}]})
+        final_response = result["messages"][-1].content
+        citations = result.get("citations", [])
 
         # Step 5: Insert the AI Response into the database.
         ai_response_insert_data = {
@@ -177,6 +189,7 @@ async def create_message(
                 "aiResponse": ai_response_creation_result.data[0],
             },
         }
+
     except Exception as e:
         raise HTTPException(
             status_code=500,

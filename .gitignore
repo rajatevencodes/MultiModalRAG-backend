@@ -30,6 +30,8 @@ wheels/
 *.egg
 MANIFEST
 
+notebooks/
+
 # Virtual environments
 .env/
 .venv/

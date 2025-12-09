@@ -308,3 +308,52 @@ def generate_query_variations(original_query: str, num_queries: int = 3) -> List
         return [original_query] + result.queries[: num_queries - 1]
     except Exception:
         return [original_query]
+
+
+def get_chat_history(
+    chat_id: str, exclude_message_id: str = None
+) -> List[Dict[str, str]]:
+    """
+    Fetch and format chat history for agent context.
+
+    Retrieves the last 10 messages (5 user + 5 assistant) from the chat,
+    excluding the current message being processed.
+
+    Args:
+        chat_id: The ID of the chat
+        exclude_message_id: Optional message ID to exclude from history
+
+    Returns:
+        List of message dictionaries with 'role' and 'content' keys
+    """
+    try:
+        query = (
+            supabase.table("messages")
+            .select("id, role, content")
+            .eq("chat_id", chat_id)
+            .order("created_at", desc=False)
+        )
+
+        # Exclude current message if provided
+        if exclude_message_id:
+            query = query.neq("id", exclude_message_id)
+
+        messages_result = query.execute()
+
+        if not messages_result.data:
+            return []
+
+        # Get last 10 messages (limit to 10 total messages)
+        recent_messages = messages_result.data[-10:]
+
+        # Format messages for agent
+        formatted_history = []
+        for msg in recent_messages:
+            formatted_history.append(
+                {"role": msg.get("role", "user"), "content": msg.get("content", "")}
+            )
+
+        return formatted_history
+    except Exception:
+        # If history retrieval fails, return empty list
+        return []

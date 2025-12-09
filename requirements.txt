@@ -11,8 +11,14 @@ redis
 
 # RAG
 
-langchain==0.3.27
-langchain-community==0.3.27
-langchain-openai==0.3.28
+langchain==1.0.8
+langchain-community==0.4.1
+langchain-openai==1.0.3
 unstructured[all-docs]==0.18.11
+langchain-tavily==0.2.13
 scrapingbee
+
+ipykernel
+ipywidgets
+
+langsmith

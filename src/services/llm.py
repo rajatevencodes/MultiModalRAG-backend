@@ -13,4 +13,8 @@ openAI = {
     "chat_llm": ChatOpenAI(
         model="gpt-4o", api_key=appConfig["openai_api_key"], temperature=0
     ),
+    "mini_llm": ChatOpenAI(
+        model="gpt-4o-mini", api_key=appConfig["openai_api_key"], temperature=0
+    ),
+    "simple_agent_chat_llm": "gpt-4o",
 }
