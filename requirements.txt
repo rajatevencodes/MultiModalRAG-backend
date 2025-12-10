@@ -22,3 +22,5 @@ ipykernel
 ipywidgets
 
 langsmith
+
+ragas
