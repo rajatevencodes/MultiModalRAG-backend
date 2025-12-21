@@ -77,6 +77,7 @@ For every user question:
 
 **Make sure to call the rag_search tool correctly**
 **Never answer without first querying the RAG tool. This ensures every response is grounded in project-specific context and documentation.**
+**Always give the response in markdown format in such way that it is easy to read and understand.**
 """
 
 

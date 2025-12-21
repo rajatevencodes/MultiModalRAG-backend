@@ -213,6 +213,7 @@ def get_supervisor_system_prompt(
 
 **ALWAYS use the RAG tool for the questions**
 **Return as much information that is given from the RAG tool as possible to the user**
+**Always give the response in markdown format in such way that it is easy to read and understand.**
 
 For all other queries, you MUST route to the appropriate agent(s) and synthesize their responses. Your role is coordination and synthesis, not direct knowledge provision.
 """
