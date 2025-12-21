@@ -3,6 +3,9 @@ from fastapi import APIRouter, HTTPException, Depends
 from src.services.supabase import supabase
 from src.services.clerkAuth import get_current_user_clerk_id
 from src.models.index import ProjectCreate, ProjectSettings
+from src.config.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["projectRoutes"])
 
@@ -23,6 +26,7 @@ Update project settings: PUT `/{project_id}/settings/update`
 @router.get("/list")
 async def get_projects(current_user_clerk_id: str = Depends(get_current_user_clerk_id)):
     try:
+        logger.info("get_projects_started", user_id=current_user_clerk_id)
         projects_query_result = (
             supabase.table("projects")
             .select("*")
@@ -30,12 +34,14 @@ async def get_projects(current_user_clerk_id: str = Depends(get_current_user_cle
             .execute()
         )
 
+        logger.info("get_projects_success", count=len(projects_query_result.data))
         return {
             "success": True,
             "message": "Projects retrieved successfully",
             "data": projects_query_result.data,
         }
     except Exception as e:
+        logger.error("get_projects_exception", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"An error occurred while fetching projects: {str(e)}",
@@ -48,6 +54,7 @@ async def create_project(
     current_user_clerk_id: str = Depends(get_current_user_clerk_id),
 ):
     try:
+        logger.info("create_project_started", project_name=project_data.name)
         # Insert new project into database
         project_insert_data = {
             "name": project_data.name,
@@ -60,6 +67,7 @@ async def create_project(
         )
 
         if not project_creation_result.data:
+            logger.error("create_project_failed_db_insert")
             raise HTTPException(
                 status_code=422,
                 detail="Failed to create project - invalid data provided",
@@ -88,6 +96,9 @@ async def create_project(
         )
 
         if not project_settings_creation_result.data:
+            logger.error(
+                "create_project_failed_settings", project_id=newly_created_project["id"]
+            )
             # Rollback: Delete the project if settings creation fails
             supabase.table("projects").delete().eq(
                 "id", newly_created_project["id"]
@@ -99,6 +110,7 @@ async def create_project(
 
         newly_created_project_settings = project_settings_creation_result.data[0]
 
+        logger.info("create_project_success", project_id=newly_created_project["id"])
         return {
             "success": True,
             "message": "Project created successfully",
@@ -108,6 +120,7 @@ async def create_project(
             },
         }
     except Exception as e:
+        logger.error("create_project_exception", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"An internal server error occurred while creating project: {str(e)}",
@@ -119,6 +132,7 @@ async def delete_project(
     project_id: str, current_user_clerk_id: str = Depends(get_current_user_clerk_id)
 ):
     try:
+        logger.info("delete_project_started", project_id=project_id)
         # Verify if the project exists and belongs to the current user
         project_ownership_verification_result = (
             supabase.table("projects")
@@ -129,6 +143,9 @@ async def delete_project(
         )
 
         if not project_ownership_verification_result.data:
+            logger.warning(
+                "delete_project_not_found_or_forbidden", project_id=project_id
+            )
             raise HTTPException(
                 status_code=404,  # Not Found - project doesn't exist or doesn't belong to user
                 detail="Project not found or you don't have permission to delete it",
@@ -147,12 +164,14 @@ async def delete_project(
         )
 
         if not project_deletion_result.data:
+            logger.error("delete_project_failed", project_id=project_id)
             raise HTTPException(
                 status_code=500,  # Internal Server Error - deletion failed unexpectedly
                 detail="Failed to delete project - please try again",
             )
 
         successfully_deleted_project = project_deletion_result.data[0]
+        logger.info("delete_project_success", project_id=project_id)
 
         return {
             "success": True,
@@ -160,6 +179,12 @@ async def delete_project(
             "data": {"deleted_project": successfully_deleted_project},
         }
     except Exception as e:
+        logger.error(
+            "delete_project_exception",
+            project_id=project_id,
+            error=str(e),
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=500,
             detail=f"An internal server error occurred while deleting project: {str(e)}",
@@ -171,6 +196,7 @@ async def get_project(
     project_id: str, current_user_clerk_id: str = Depends(get_current_user_clerk_id)
 ):
     try:
+        logger.info("get_project_started", project_id=project_id)
         project_result = (
             supabase.table("projects")
             .select("*")
@@ -180,17 +206,22 @@ async def get_project(
         )
 
         if not project_result.data:
+            logger.warning("get_project_not_found_or_forbidden", project_id=project_id)
             raise HTTPException(
                 status_code=404,
                 detail="Project not found or you don't have permission to access it",
             )
 
+        logger.info("get_project_success", project_id=project_id)
         return {
             "success": True,
             "message": "Project retrieved successfully",
             "data": project_result.data[0],
         }
     except Exception as e:
+        logger.error(
+            "get_project_exception", project_id=project_id, error=str(e), exc_info=True
+        )
         raise HTTPException(
             status_code=500,
             detail=f"An internal server error occurred while retrieving project: {str(e)}",
@@ -202,6 +233,7 @@ async def get_project_chats(
     project_id: str, current_user_clerk_id: str = Depends(get_current_user_clerk_id)
 ):
     try:
+        logger.info("get_project_chats_started", project_id=project_id)
         project_chats_result = (
             supabase.table("chats")
             .select("*")
@@ -217,12 +249,23 @@ async def get_project_chats(
         #         detail="No chats found for project",
         #     )
 
+        logger.info(
+            "get_project_chats_success",
+            project_id=project_id,
+            count=len(project_chats_result.data),
+        )
         return {
             "success": True,
             "message": "Project chats retrieved successfully",
             "data": project_chats_result.data,  # Not result.data[0] because we are returning all chats for the project
         }
     except Exception as e:
+        logger.error(
+            "get_project_chats_exception",
+            project_id=project_id,
+            error=str(e),
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=500,
             detail=f"An internal server error occurred while retrieving project {project_id} chats: {str(e)}",
@@ -234,6 +277,7 @@ async def get_project_settings(
     project_id: str, current_user_clerk_id: str = Depends(get_current_user_clerk_id)
 ):
     try:
+        logger.info("get_project_settings_started", project_id=project_id)
         project_settings_result = (
             supabase.table("project_settings")
             .select("*")
@@ -242,17 +286,25 @@ async def get_project_settings(
         )
 
         if not project_settings_result.data:
+            logger.warning("get_project_settings_not_found", project_id=project_id)
             raise HTTPException(
                 status_code=404,
                 detail="No settings found for project",
             )
 
+        logger.info("get_project_settings_success", project_id=project_id)
         return {
             "success": True,
             "message": "Project settings retrieved successfully",
             "data": project_settings_result.data[0],
         }
     except Exception as e:
+        logger.error(
+            "get_project_settings_exception",
+            project_id=project_id,
+            error=str(e),
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=500,
             detail=f"An internal server error occurred while retrieving project {project_id} settings: {str(e)}",
@@ -266,6 +318,7 @@ async def update_project_settings(
     current_user_clerk_id: str = Depends(get_current_user_clerk_id),
 ):
     try:
+        logger.info("update_project_settings_started", project_id=project_id)
         # Verify if the project settings exist and belongs to the current user
         # First verify the project belongs to the user
         project_ownership_verification_result = (
@@ -277,6 +330,7 @@ async def update_project_settings(
         )
 
         if not project_ownership_verification_result.data:
+            logger.warning("update_project_settings_forbidden", project_id=project_id)
             raise HTTPException(
                 status_code=404,
                 detail="Project not found or you don't have permission to update its settings",
@@ -307,14 +361,22 @@ async def update_project_settings(
         )
 
         if not project_settings_update_result.data:
+            logger.error("update_project_settings_failed", project_id=project_id)
             raise HTTPException(
                 status_code=422, detail="Failed to update project settings"
             )
 
+        logger.info("update_project_settings_success", project_id=project_id)
         return {
             "success": True,
             "message": "Project settings updated successfully",
             "data": project_settings_update_result.data[0],
         }
     except Exception as e:
+        logger.error(
+            "update_project_settings_exception",
+            project_id=project_id,
+            error=str(e),
+            exc_info=True,
+        )
         raise HTTPException(status_code=500, detail=str(e))

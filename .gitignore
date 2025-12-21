@@ -30,6 +30,8 @@ wheels/
 *.egg
 MANIFEST
 
+uv.lock
+
 
 # Virtual environments
 .env/

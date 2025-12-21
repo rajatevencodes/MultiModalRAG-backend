@@ -7,6 +7,9 @@ from src.models.index import FileUploadRequest, UrlRequest, ProcessingStatus
 from src.utils.index import validate_url
 import uuid
 from src.services.celery import perform_rag_ingestion_task
+from src.config.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(tags=["projectFilesRoutes"])
 
@@ -27,6 +30,7 @@ async def get_project_files(
     project_id: str, current_user_clerk_id: str = Depends(get_current_user_clerk_id)
 ):
     try:
+        logger.info("get_project_files_started", project_id=project_id)
         project_files_result = (
             supabase.table("project_documents")
             .select("*")
@@ -36,12 +40,23 @@ async def get_project_files(
             .execute()
         )
 
+        logger.info(
+            "get_project_files_success",
+            project_id=project_id,
+            count=len(project_files_result.data),
+        )
         return {
             "success": True,
             "message": "Project files retrieved successfully",
             "data": project_files_result.data,
         }
     except Exception as e:
+        logger.error(
+            "get_project_files_exception",
+            project_id=project_id,
+            error=str(e),
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=500,
             detail=f"An internal server error occurred while retrieving project {project_id} files: {str(e)}",
@@ -63,6 +78,11 @@ async def get_upload_presigned_url(
     5. Return presigned url
     """
     try:
+        logger.info(
+            "get_presigned_url_started",
+            project_id=project_id,
+            filename=file_upload_request.file_name,
+        )
         # Verify project exists and belongs to the current user
         project_ownership_verification_result = (
             supabase.table("projects")
@@ -73,6 +93,7 @@ async def get_upload_presigned_url(
         )
 
         if not project_ownership_verification_result.data:
+            logger.warning("get_presigned_url_forbidden", project_id=project_id)
             raise HTTPException(
                 status_code=404,
                 detail="Project not found or you don't have permission to upload files to this project",
@@ -103,6 +124,7 @@ async def get_upload_presigned_url(
         )
 
         if not presigned_url:
+            logger.error("get_presigned_url_failed", project_id=project_id)
             raise HTTPException(
                 status_code=422,
                 detail="Failed to generate upload presigned url",
@@ -126,11 +148,13 @@ async def get_upload_presigned_url(
         )
 
         if not document_creation_result.data:
+            logger.error("get_presigned_url_db_failed", project_id=project_id)
             raise HTTPException(
                 status_code=422,
                 detail="Failed to create project document - invalid data provided",
             )
 
+        logger.info("get_presigned_url_success", project_id=project_id, s3_key=s3_key)
         return {
             "success": True,
             "message": "Upload presigned url generated successfully",
@@ -141,6 +165,12 @@ async def get_upload_presigned_url(
             },
         }
     except Exception as e:
+        logger.error(
+            "get_presigned_url_exception",
+            project_id=project_id,
+            error=str(e),
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=500,
             detail=f"An internal server error occurred while generating upload presigned url for {project_id}: {str(e)}",
@@ -155,6 +185,7 @@ async def confirm_file_upload_to_s3(
 ):
     try:
         s3_key = confirm_file_upload_request["s3_key"]
+        logger.info("confirm_s3_upload_started", project_id=project_id, s3_key=s3_key)
         if not s3_key:
             raise HTTPException(
                 status_code=400,
@@ -172,6 +203,7 @@ async def confirm_file_upload_to_s3(
         )
 
         if not document_verification_result.data:
+            logger.warning("confirm_s3_upload_not_found_forbidden", s3_key=s3_key)
             raise HTTPException(
                 status_code=404,
                 detail="File not found or you don't have permission to confirm upload to S3 for this file",
@@ -195,6 +227,9 @@ async def confirm_file_upload_to_s3(
         # * Celery Task - returns a task id - Store to track later
         task_result = perform_rag_ingestion_task.delay(document_id)
         task_id = task_result.id
+        logger.info(
+            "confirm_s3_upload_task_started", task_id=task_id, document_id=document_id
+        )
 
         # Update the project document record with the task_id
         document_update_result = (
@@ -208,11 +243,13 @@ async def confirm_file_upload_to_s3(
             .execute()
         )
         if not document_update_result.data:
+            logger.error("confirm_s3_upload_update_failed", document_id=document_id)
             raise HTTPException(
                 status_code=422,
                 detail="Failed to update project document record with task_id",
             )
 
+        logger.info("confirm_s3_upload_success", document_id=document_id)
         return {
             "success": True,
             "message": "File upload to S3 confirmed successfully And Started Background Pre-Processing of this file",
@@ -222,6 +259,12 @@ async def confirm_file_upload_to_s3(
         }
 
     except Exception as e:
+        logger.error(
+            "confirm_s3_upload_exception",
+            project_id=project_id,
+            error=str(e),
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=500,
             detail=f"An internal server error occurred while confirming upload to S3 for {project_id}: {str(e)}",
@@ -237,6 +280,7 @@ async def process_url(
     try:
         # Validate URL
         url = url.url
+        logger.info("process_url_started", project_id=project_id, url=url)
         if url.startswith("http://") or url.startswith("https://"):
             url = url
         else:
@@ -268,6 +312,7 @@ async def process_url(
         )
 
         if not document_creation_result.data:
+            logger.error("process_url_db_failed", project_id=project_id, url=url)
             raise HTTPException(
                 status_code=422,
                 detail="Failed to create project document with URL Record - invalid data provided",
@@ -279,6 +324,9 @@ async def process_url(
         # * Celery Task - returns a task id - Store to track later
         task_result = perform_rag_ingestion_task.delay(document_id)
         task_id = task_result.id
+        logger.info(
+            "process_url_task_started", task_id=task_id, document_id=document_id
+        )
 
         #  Update the project document record with the task_id
         document_update_result = (
@@ -293,11 +341,13 @@ async def process_url(
         )
 
         if not document_update_result.data:
+            logger.error("process_url_update_failed", document_id=document_id)
             raise HTTPException(
                 status_code=422,
                 detail="Failed to update project document record with task_id",
             )
 
+        logger.info("process_url_success", document_id=document_id)
         return {
             "success": True,
             "message": "Website URL added to database successfully And Started Background Pre-Processing of this URL",
@@ -307,6 +357,9 @@ async def process_url(
         }
 
     except Exception as e:
+        logger.error(
+            "process_url_exception", project_id=project_id, error=str(e), exc_info=True
+        )
         raise HTTPException(
             status_code=500,
             detail=f"An internal server error occurred while processing urls for {project_id}: {str(e)}",
@@ -320,6 +373,9 @@ async def delete_project_document(
     current_user_clerk_id: str = Depends(get_current_user_clerk_id),
 ):
     try:
+        logger.info(
+            "delete_document_started", project_id=project_id, document_id=document_id
+        )
         # Verify document exists and belongs to the current user and Take complete project document record
         document_ownership_verification_result = (
             supabase.table("project_documents")
@@ -352,17 +408,25 @@ async def delete_project_document(
         )
 
         if not document_deletion_result.data:
+            logger.error("delete_document_failed", document_id=document_id)
             raise HTTPException(
                 status_code=404,
                 detail="Failed to delete document",
             )
 
+        logger.info("delete_document_success", document_id=document_id)
         return {
             "success": True,
             "message": "Document deleted successfully",
             "data": document_deletion_result.data[0],
         }
     except Exception as e:
+        logger.error(
+            "delete_document_exception",
+            document_id=document_id,
+            error=str(e),
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=500,
             detail=f"An internal server error occurred while deleting project document {document_id} for {project_id}: {str(e)}",
@@ -376,6 +440,9 @@ async def get_project_document_chunks(
     current_user_clerk_id: str = Depends(get_current_user_clerk_id),
 ):
     try:
+        logger.info(
+            "get_chunks_started", project_id=project_id, document_id=document_id
+        )
         # Verify document exists and belongs to the current user and Take complete project document record
         document_ownership_verification_result = (
             supabase.table("project_documents")
@@ -387,6 +454,9 @@ async def get_project_document_chunks(
         )
 
         if not document_ownership_verification_result.data:
+            logger.warning(
+                "get_chunks_document_not_found_forbidden", document_id=document_id
+            )
             raise HTTPException(
                 status_code=404,
                 detail="Document not found or you don't have permission to delete this document",
@@ -400,12 +470,20 @@ async def get_project_document_chunks(
             .execute()
         )
 
+        logger.info(
+            "get_chunks_success",
+            document_id=document_id,
+            count=len(document_chunks_result.data),
+        )
         return {
             "success": True,
             "message": "Project document chunks retrieved successfully",
             "data": document_chunks_result.data or [],
         }
     except Exception as e:
+        logger.error(
+            "get_chunks_exception", document_id=document_id, error=str(e), exc_info=True
+        )
         raise HTTPException(
             status_code=500,
             detail=f"An internal server error occurred while getting project document chunks for {document_id} for {project_id}: {str(e)}",

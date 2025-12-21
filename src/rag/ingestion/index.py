@@ -15,6 +15,10 @@ from src.models.index import ProcessingStatus
 from unstructured.chunking.title import chunk_by_title
 from src.services.webScrapper import scrapingbee_client
 
+from src.config.logging import get_logger, set_project_id
+
+logger = get_logger(__name__)
+
 
 def process_document(document_id: str):
     """
@@ -27,6 +31,7 @@ def process_document(document_id: str):
     """
 
     try:
+        logger.info("processing_document_started", document_id=document_id)
         update_status_in_database(document_id, ProcessingStatus.PROCESSING)
 
         document_result = (
@@ -42,6 +47,7 @@ def process_document(document_id: str):
         document = document_result.data[0]
 
         # Step 1 : Download from S3 (file) or Crawl the URL (url) and Extract content.
+        logger.info("step_1_download_partition_started", document_id=document_id)
         update_status_in_database(document_id, ProcessingStatus.PARTITIONING)
         elements_summary, elements = download_content_and_partition(
             document_id, document
@@ -59,6 +65,7 @@ def process_document(document_id: str):
         )
 
         # Step 2 : Split the extracted content into chunks.
+        logger.info("step_2_chunking_started", document_id=document_id)
         chunks, chunking_metrics = chunk_elements_by_title(elements)
         update_status_in_database(
             document_id,
@@ -70,19 +77,32 @@ def process_document(document_id: str):
         )
 
         # Step 3 : Generate AI summaries for chunk which are Having images and tables.
+        logger.info(
+            "step_3_summarisation_started",
+            document_id=document_id,
+            total_chunks=len(chunks),
+        )
         processed_chunks = summarise_chunks(chunks, document_id)
         update_status_in_database(document_id, ProcessingStatus.VECTORIZATION)
 
         # Step 4 : Create vector embeddings (1536 dimensions per chunk).
+        logger.info("step_4_vectorization_started", document_id=document_id)
         vectorize_chunks_summary_and_store_in_database(processed_chunks, document_id)
 
         update_status_in_database(document_id, ProcessingStatus.COMPLETED)
+        logger.info("processing_document_completed", document_id=document_id)
 
         return {
             "success": True,
             "document_id": document_id,
         }
     except Exception as e:
+        logger.error(
+            "processing_document_failed",
+            document_id=document_id,
+            error=str(e),
+            exc_info=True,
+        )
         raise Exception(f"Failed to process document {document_id}: {str(e)}")
 
 
@@ -148,6 +168,11 @@ def download_content_and_partition(document_id: str, document: dict):
     try:
         # Get the project document record
         document_source_type = document["source_type"]
+        logger.info(
+            "download_content_started",
+            document_id=document_id,
+            source_type=document_source_type,
+        )
         elements = None
         temp_file_path = None
         if document_source_type == "file":
@@ -174,6 +199,9 @@ def download_content_and_partition(document_id: str, document: dict):
             elements = partition_document(temp_file_path, "html", source_type="url")
 
         elements_summary = analyze_elements(elements)
+        logger.info(
+            "elements_analyzed", document_id=document_id, summary=elements_summary
+        )
 
         # Delete the temprary file
         os.remove(temp_file_path)
@@ -199,6 +227,7 @@ def chunk_elements_by_title(elements):
         total_chunks = len(chunks)
 
         chunking_metrics = {"total_chunks": total_chunks}
+        logger.info("chunking_completed", metrics=chunking_metrics)
 
         return chunks, chunking_metrics
     except Exception as e:
@@ -363,7 +392,11 @@ def vectorize_chunks_summary_and_store_in_database(processed_chunks, document_id
             )
             stored_chunk_ids.append(result.data[0]["id"])
 
-        # print(f"Successfully stored {len(processed_chunks)} chunks with embeddings")
+        logger.info(
+            "vectorization_storage_completed",
+            count=len(processed_chunks),
+            document_id=document_id,
+        )
         return stored_chunk_ids
 
     except Exception as e:

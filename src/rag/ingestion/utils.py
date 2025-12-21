@@ -7,6 +7,9 @@ from unstructured.partition.md import partition_md
 
 from src.services.llm import openAI
 from langchain_core.messages import HumanMessage
+from src.config.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def partition_document(temp_file: str, file_type: str, source_type: str = "file"):
@@ -43,6 +46,7 @@ def partition_document(temp_file: str, file_type: str, source_type: str = "file"
     }
 
     if kind not in dispatch:
+        logger.error("partition_document_unsupported_type", file_type=kind)
         raise ValueError(f"Unsupported file_type: {file_type}")
 
     return dispatch[kind]()
@@ -149,6 +153,12 @@ def create_ai_summary(text, tables_html, images_base64):
     """Create AI-enhanced summary for tables and images present in the chunks"""
 
     try:
+        logger.info(
+            "create_ai_summary_started",
+            text_length=len(text),
+            tables_count=len(tables_html),
+            images_count=len(images_base64),
+        )
         # Build the text prompt with more efficient instructions
         prompt_text = f"""
             Create a searchable index for this document content.
@@ -204,7 +214,9 @@ def create_ai_summary(text, tables_html, images_base64):
         message = HumanMessage(content=message_content)
         response = openAI["embeddings_llm"].invoke([message])
 
+        logger.info("create_ai_summary_success")
         return response.content
 
     except Exception as e:
+        logger.error("create_ai_summary_failed", error=str(e), exc_info=True)
         raise Exception(f"Failed to create AI summary: {str(e)}")
